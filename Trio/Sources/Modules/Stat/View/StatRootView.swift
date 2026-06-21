@@ -235,6 +235,7 @@ extension Stat {
                     units: state.units,
                     lowLimit: state.lowLimit,
                     highLimit: state.highLimit,
+                    selectedInterval: state.selectedIntervalForGlucoseStats,
                     glucose: state.glucoseReadings
                 )
             }

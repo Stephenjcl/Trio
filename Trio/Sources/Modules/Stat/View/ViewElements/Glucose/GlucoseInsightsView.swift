@@ -7,6 +7,10 @@ import SwiftUI
 /// This view is intentionally informational only: it describes patterns (trends,
 /// time-of-day tendencies, variability) and does NOT make any therapy or dosing
 /// recommendations. All computation happens on-device from already-loaded data.
+///
+/// The analysis window follows the duration the user has selected for the glucose
+/// statistics screen, and deltas compare it against the immediately preceding
+/// window of the same length.
 struct GlucoseInsightsView: View {
     /// The unit of measurement for blood glucose values (e.g., mg/dL or mmol/L).
     let units: GlucoseUnits
@@ -14,6 +18,8 @@ struct GlucoseInsightsView: View {
     let lowLimit: Decimal
     /// The upper glucose threshold (mg/dL) used for time-in-range.
     let highLimit: Decimal
+    /// The duration selected on the glucose statistics screen.
+    let selectedInterval: Stat.StateModel.StatsTimeIntervalWithToday
     /// A list of stored glucose readings (typically the trailing ~90 days).
     let glucose: [GlucoseStored]
 
@@ -43,24 +49,27 @@ struct GlucoseInsightsView: View {
                 Text("Insights")
                     .font(.headline)
                 Spacer()
+                Text(periodLabel)
+                    .font(.caption)
+                    .foregroundStyle(Color.secondary)
             }
 
             if let recent = insights.recent {
                 HStack(alignment: .top) {
                     insightTile(
-                        title: String(localized: "Avg (7d)"),
+                        title: String(localized: "Avg"),
                         value: formatGlucose(recent.average),
                         delta: insights.previous.map { glucoseDeltaText(recent.average - $0.average) }
                     )
                     Spacer()
                     insightTile(
-                        title: String(localized: "TIR (7d)"),
+                        title: String(localized: "TIR"),
                         value: percentString(recent.timeInRange, fractionDigits: 0),
                         delta: insights.previous.map { pointsDeltaText(recent.timeInRange - $0.timeInRange) }
                     )
                     Spacer()
                     insightTile(
-                        title: String(localized: "CV (14d)"),
+                        title: String(localized: "CV"),
                         value: percentString(insights.cv, fractionDigits: 1),
                         delta: nil
                     )
@@ -94,7 +103,7 @@ struct GlucoseInsightsView: View {
                 .font(.caption2)
                 .foregroundStyle(Color.secondary)
             } else {
-                Text("Not enough recent glucose data to show insights yet.")
+                Text("Not enough glucose data in this period to show insights yet.")
                     .font(.footnote)
                     .foregroundStyle(Color.secondary)
             }
@@ -125,6 +134,30 @@ struct GlucoseInsightsView: View {
             Text(text)
                 .font(.footnote)
                 .foregroundStyle(Color.secondary)
+        }
+    }
+
+    // MARK: - Labels
+
+    private var periodLabel: String {
+        switch selectedInterval {
+        case .today: return String(localized: "Today")
+        case .day: return String(localized: "Last 24h")
+        case .week: return String(localized: "Last 7 days")
+        case .month: return String(localized: "Last 30 days")
+        case .total: return String(localized: "Last 90 days")
+        }
+    }
+
+    /// Number of days the selected interval represents (used to size the
+    /// comparison window). `.today` is handled separately in `windowBounds`.
+    private var durationInDays: Int {
+        switch selectedInterval {
+        case .today,
+             .day: return 1
+        case .week: return 7
+        case .month: return 30
+        case .total: return 90
         }
     }
 
@@ -166,31 +199,43 @@ struct GlucoseInsightsView: View {
 
     // MARK: - Computation
 
-    private func computeInsights() -> Insights {
+    /// The recent analysis window and the equal-length window immediately
+    /// preceding it, both derived from the selected duration.
+    private func windowBounds() -> (recentStart: Date, recentEnd: Date, previousStart: Date, previousEnd: Date) {
         let now = Date()
         let calendar = Calendar.current
-        let recentStart = calendar.date(byAdding: .day, value: -7, to: now) ?? now
-        let previousStart = calendar.date(byAdding: .day, value: -14, to: now) ?? now
+
+        switch selectedInterval {
+        case .today:
+            let start = calendar.startOfDay(for: now)
+            let length = now.timeIntervalSince(start)
+            return (start, now, start.addingTimeInterval(-length), start)
+        default:
+            let days = durationInDays
+            let recentStart = calendar.date(byAdding: .day, value: -days, to: now) ?? now
+            let previousStart = calendar.date(byAdding: .day, value: -2 * days, to: now) ?? now
+            return (recentStart, now, previousStart, recentStart)
+        }
+    }
+
+    private func computeInsights() -> Insights {
+        let bounds = windowBounds()
 
         let recentReadings = glucose.filter { reading in
             guard let date = reading.date else { return false }
-            return date >= recentStart && date <= now
+            return date >= bounds.recentStart && date <= bounds.recentEnd
         }
         let previousReadings = glucose.filter { reading in
             guard let date = reading.date else { return false }
-            return date >= previousStart && date < recentStart
-        }
-        let last14Readings = glucose.filter { reading in
-            guard let date = reading.date else { return false }
-            return date >= previousStart && date <= now
+            return date >= bounds.previousStart && date < bounds.previousEnd
         }
 
         return Insights(
             recent: windowStats(for: recentReadings),
             previous: windowStats(for: previousReadings),
-            cv: coefficientOfVariation(for: last14Readings),
-            peakHour: hourlyExtreme(for: last14Readings, findMax: true),
-            troughHour: hourlyExtreme(for: last14Readings, findMax: false)
+            cv: coefficientOfVariation(for: recentReadings),
+            peakHour: hourlyExtreme(for: recentReadings, findMax: true),
+            troughHour: hourlyExtreme(for: recentReadings, findMax: false)
         )
     }
 
