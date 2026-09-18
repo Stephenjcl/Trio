@@ -113,6 +113,10 @@ extension Stat {
                     glucoseStatsCard
                 }
 
+                if !state.glucoseReadings.isEmpty {
+                    insightsCard
+                }
+
                 HStack {
                     var hintText: String {
                         switch state.selectedGlucoseChartType {
@@ -224,6 +228,18 @@ extension Stat {
                         glucose: state.glucoseFromPersistence
                     )
                 }
+            }
+        }
+
+        private var insightsCard: some View {
+            StatCard {
+                GlucoseInsightsView(
+                    units: state.units,
+                    lowLimit: state.lowLimit,
+                    highLimit: state.highLimit,
+                    selectedInterval: state.selectedIntervalForGlucoseStats,
+                    glucose: state.glucoseReadings
+                )
             }
         }
 

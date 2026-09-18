@@ -145,6 +145,36 @@ extension AutotuneConfig {
                                 Text(" U/day")
                                 .foregroundColor(.secondary)
                         }
+
+                        if !state.currentBasalProfile.isEmpty {
+                            let suggestedTotal = autotune.basalProfile.reduce(0) { $0 + $1.rate }
+                            let currentTotal = state.currentBasalProfile.reduce(0) { $0 + $1.rate }
+                            let difference = suggestedTotal - currentTotal
+
+                            HStack {
+                                Text("Your current total")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text(rateFormatter.string(from: currentTotal as NSNumber) ?? "0")
+                                Text("U/day").foregroundColor(.secondary)
+                            }
+                            HStack {
+                                Text("Difference")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text((difference > 0 ? "+" : "") + (rateFormatter.string(from: difference as NSNumber) ?? "0"))
+                                Text("U/day").foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .listRowBackground(Color.chart)
+
+                    Section {
+                        Text(
+                            "These are suggestions derived from your recent data. They do not change your settings unless you choose to apply them below. Review carefully and discuss any therapy changes with your care team."
+                        )
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                     }
                     .listRowBackground(Color.chart)
 

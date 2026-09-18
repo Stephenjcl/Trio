@@ -9,6 +9,7 @@ extension AutotuneConfig {
         @Published var useAutotune = false
         @Published var onlyAutotuneBasals = false
         @Published var autotune: Autotune?
+        @Published var currentBasalProfile: [BasalProfileEntry] = []
         private(set) var units: GlucoseUnits = .mgdL
         @Published var publishedDate = Date()
         @Persisted(key: "lastAutotuneDate") private var lastAutotuneDate = Date() {
@@ -21,6 +22,7 @@ extension AutotuneConfig {
 
         override func subscribe() {
             autotune = provider.autotune
+            currentBasalProfile = storage.retrieve(OpenAPS.Settings.basalProfile, as: [BasalProfileEntry].self) ?? []
             units = settingsManager.settings.units
             useAutotune = settingsManager.settings.useAutotune
             publishedDate = lastAutotuneDate
